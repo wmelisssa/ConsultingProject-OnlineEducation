@@ -1,7 +1,6 @@
+### Functions used in Reports
 
-
-
-
+# Create Percentage Table
 percentage.table <- function(x, digits = 2){
   tab <- table(x)
   percentage.tab <- 100*tab/(sum(tab))
@@ -9,7 +8,7 @@ percentage.table <- function(x, digits = 2){
   return(rounded.tab)
 }
 
-
+# Plot Bar Chart
 plot_barchart <- function(data, x_var, y_var, x_label, y_label, plot_title, reorder_x = TRUE) {
   if (reorder_x) {
     data <- data %>%
@@ -26,13 +25,13 @@ plot_barchart <- function(data, x_var, y_var, x_label, y_label, plot_title, reor
           panel.grid = element_blank())
 }
 
-
-
+# Build Engagement Model
 engagement.model <- function(dt, outcome.name, input.names, model.type){
   res <- fit.model(dt = dt, outcome.name = outcome.name, input.names = input.names, model.type = model.type)
   return(res)
 }
 
+# Fit Logistic or Linear Model
 fit.model <- function(dt, outcome.name, input.names, model.type, digits = 3){
   library(formulaic)
   the.formula <- create.formula(outcome.name = outcome.name, input.names = input.names, dat = dt, reduce = T)
@@ -83,7 +82,7 @@ round.numerics <- function(x, digits){
 
 
 
-# load afinn dictionary
+# Load afinn dictionary
 afinn = read.table('https://raw.githubusercontent.com/pseudorational/data/master/AFINN-111.txt',
                    header = F,
                    quote="",
@@ -93,6 +92,7 @@ afinn = read.table('https://raw.githubusercontent.com/pseudorational/data/master
                    stringsAsFactors = F)
 afinn <- as.data.table(afinn)
 
+# Score Reviews based on Afinn Dictionary
 afinn.score <- function(review){
   rev.token <- review[, .( word = trimws(unlist(strsplit(tolower(review), "\\W+")))), by = review.id]
   rev.token <- rev.token[!word %in% stop_words$word]
@@ -103,6 +103,7 @@ afinn.score <- function(review){
   return(review_scores)
 }
 
+# Calculate Word Frequency of Positive / Negative Reviews
 word.freq <- function(review_scores, data, positive){
   if (positive == TRUE) {
     reviews_id <- review_scores[score > 0, "review.id"]
@@ -123,17 +124,20 @@ word.freq <- function(review_scores, data, positive){
   return(word.freq)
 }
 
+# Create Skills Vector
 skills_vector <- function(data){
   skill_list <- unlist(strsplit(data$skills, ", "))
   return(skill_list)
 }
 
+# Count Skills 
 count_skills <- function(data){
   skill_freq <- tibble(skill = data) %>%
     count(skill, sort = TRUE)
   return(skill_freq)
 }
 
+# Frequency of Skills
 freq_by_skill <- function(data){
   skill_counts_tab <- tibble(skill = data) %>%
     count(skill, sort = TRUE)

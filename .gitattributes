@@ -1,1 +1,3 @@
-Report/Static-Report_Final/* linguist-vendored
+* linguist-vendored
+*.R linguist-vendored=false
+*.rmd linguist-vendored=false

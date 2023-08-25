@@ -1,0 +1,559 @@
+---
+title: "Online Learning Platform"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(shiny)
+library(rmarkdown)
+library(knitr)
+library(Hmisc)
+library(DT)
+library(data.table)
+library(dplyr)
+library(ggplot2)
+library(RColorBrewer)
+library(wordcloud2)
+library(tidytext)
+
+assignInNamespace("cedta.override", c(data.table:::cedta.override,"rmarkdown"), "data.table")
+
+opts_chunk$set(echo = FALSE, comment="", warning = FALSE, message = FALSE, tidy.opts=list(width.cutoff=55), tidy = TRUE)
+
+```
+
+```{r source_functions}
+
+source("../Reports/functions.R")
+source("../Reports/constants.R")
+
+```
+
+```{r constants}
+
+```
+
+```{r read_data}
+
+#data for skills required
+dat_dice <- fread(input = "../Data/dice_com-job_us_sample.csv", verbose = F)
+dat_2 <- fread(input = "../Data/career_builder.csv", verbose = F)
+
+#data for course analyses
+dat <- fread(input = "../Data/Udemy_Course_info.csv", verbose = F)
+
+#data for sentiment analyses
+udemy.comments <- fread(input ="../Data/Udemy_Comments.csv")
+
+```
+
+```{r prep_data skills}
+
+#dat_dice
+# Step 1: Create a vector of all skills
+all_skills_2 <- unlist(strsplit(dat_dice$skills, ", "))
+
+# Step 2: Calculate frequency of each skill
+skill_counts_2 <- tibble(skill = all_skills_2) %>%
+  count(skill, sort = TRUE)
+
+#dat_2
+# Step 1: Create a vector of all skills
+all_skills <- unlist(strsplit(dat_2$skills, ", "))
+
+# Step 2: Calculate frequency of each skill
+skill_counts <- tibble(skill = all_skills) %>%
+  count(skill, sort = TRUE)
+
+# Combine the "skills" columns from both datasets
+combined_skills <- c(dat_dice$skills, dat_2$skills)
+
+# Split the combined skills vector by commas to get individual skills
+individual_skills <- combined_skills %>%
+  strsplit(",\\s*") %>%
+  unlist()
+
+# Calculate frequency of each skill
+skill_counts_combined <- tibble(skill = individual_skills) %>%
+  count(skill, sort = TRUE)
+
+colnames(skill_counts_combined)[2] <- "Frequency"
+```
+
+```{r clean_data courses}
+
+# Filter only for English courses
+dat <- dat[language == "English",]
+
+# Convert published date
+dat <- dat[, published_date := as.Date(published_time)]
+
+# Convert the column to date format
+dat <- dat[, last_update_date := as.IDate(last_update_date, format = "%d/%m/%Y")]
+dat[last_update_date == "", last_update_date := NA]
+
+# Replace blanks with NULL in the "topic" column
+dat <- dat[topic == "", topic := NA]
+
+# Calculate duration per lecture
+dat <- dat[, duration_per_lecture := round(content_length_min / num_lectures, 2)]
+dat <- dat[is.na(duration_per_lecture), duration_per_lecture := 0]
+
+```
+
+
+```{r prep reviews data}
+# only keep english courses
+udemy.eng <- dat[language == "English",]
+
+# only keep english comments
+language_detection <- cld2::detect_language(udemy.comments$comment)
+udemy.comments.eng <- udemy.comments[, lang := language_detection][lang == "en", ]
+
+# make course id numeric type
+udemy.comments.eng$course_id <- as.numeric(udemy.comments.eng$course_id)
+
+# merge course & reviews
+udemy.merged <- merge(udemy.comments.eng, udemy.eng, by.x ='course_id', by.y= 'id', multiple = "all")
+
+#date time as only date
+udemy.merged$date <- as.Date(udemy.merged$date)
+reviews <- udemy.merged[, .(review.id = id, course = title, date = date, 
+                                         rating = rate, subscribers = num_subscribers, price = price, category = category, 
+                                          topic = topic, subcategory = subcategory, instructor = instructor_name, review = comment)]
+
+# Due to the large amount reviews, we will subset reviews for the most recent 3 years
+reviews.2020 <- reviews[date >= '2020-01-01' & date < '2021-01-01',]
+reviews.2021 <- reviews[date >= '2021-01-01' & date < '2022-01-01',]
+reviews.2022 <- reviews[date >= '2022-01-01' & date < '2023-01-01',]
+```
+
+
+```{r functions}
+# this function calls above subset of reviews
+year.cat <- function(year, cat){
+  if(year == "2022"){
+    rev <- reviews.2022
+  }
+  if(year == "2021"){
+    rev <- reviews.2021
+  }
+  if(year == "2020"){
+    rev <- reviews.2020
+  }
+  rev.cat <- rev[category == cat, .(review.id = review.id, review = review)]
+  return(rev.cat)
+}
+
+```
+
+```{r define_variables}
+
+dat[, "rating_group" := cut(
+  avg_rating,
+  breaks = c(-Inf, 0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, Inf),
+  labels = c("Not rated", "<=0.5", ">0.5 - 1.0", ">1.0 - 1.5", ">1.5 - 2.0", ">2.0 - 2.5", ">2.5 - 3.0", ">3.0 - 3.5", ">3.5 - 4.0", ">4.0 - 4.5", ">4.5 - 5.0"), 
+  right = TRUE
+)]
+
+dat[, "duration_group" := cut(
+  content_length_min,
+  breaks = c(-Inf, 0, 3000, 6000, 9000, 12000, 15000, 18000, 21000, Inf),
+  labels = c("Free", ">0 - 3000", ">3000 - 6000", ">6000 - 9000", ">9000 - 12000", ">12000 - 15000", ">15000 - 18000", ">18000 - 21000", ">21000"),  
+  right = TRUE
+)]
+
+dat[, "duration_lect_group" := cut(
+  duration_per_lecture,
+  breaks = c(-Inf, 0, 30, 60, 90, 120, 150, 180, 210, Inf),
+  labels = c("Free", ">0 - 30", ">30 - 60", ">60 - 90", ">90 - 120", ">120 - 150", ">150 - 180", ">180 - 210", ">210"),  
+  right = TRUE
+)]
+
+dat[, "price_group" := cut(
+  price,
+  breaks = c(-Inf, 0, 100, 200, 300, 400, 500, 600, 700, 800, 900, Inf),
+  labels = c("Free", ">0 - 100", ">100 - 200", ">200 - 300", ">300 - 400", ">400 - 500", ">500 - 600", ">600 - 700", ">700 - 800", ">800 - 900", ">900"),  
+  right = TRUE
+)]
+
+unique.paid <- dat[, sort(unique(get(paid.name)))]
+unique.categories <- dat[, sort(unique(get(category.name)))]
+unique.subcategories <- dat[, sort(unique(get(subcategory.name)))]
+unique.topics <- dat[, sort(unique(get(topic.name)))]
+
+unique.rating.groups <- dat[, sort(unique(get(rating.group.name)))]
+unique.duration.groups <- dat[, sort(unique(get(duration.group.name)))]
+unique.duration.lect.groups <- dat[, sort(unique(get(duration.lect.group.name)))]
+unique.price.groups <- dat[, sort(unique(get(price.group.name)))]
+
+```
+
+
+Introduction
+=====================================  
+
+Here is a dashboard on the skills in demand by employers, courses offered by key competitor Udemy and sentiment analyses of learners.
+
+There are `r dat[, .N]` courses, `r dat[, length(unique(get(category.name)))]` unique categories, `r dat[, length(unique(get(topic.name)))]` unique skills, `r dat[, length(unique(get(instructor.name)))]` instructors, and `r reviews[, length(unique(review.id))]` reviews.
+
+Click on the tabs to see different reports.
+
+
+1.Skills in Demand
+===================================
+
+What are the top skills employers are looking for
+
+Row {data-height=500}
+-------------------------------------
+
+```{r 1_input}
+inputPanel(
+  sliderInput(inputId = "Skills_Chart_Skills", label = "Show Top Skills", min = 1, max = 30, value = 10, step = 1)
+)
+
+```
+
+```{r 1_output}
+
+renderPlot({
+  top_skills_data <- head(skill_counts_combined, input$Skills_Chart_Skills)  # Select the top skills based on user input
+  top_skills_data <- top_skills_data %>% arrange(desc(Frequency))  # Sort the data in descending order of frequency
+  
+  # Create the bar chart
+  ggplot(top_skills_data, aes(x = reorder(skill, -Frequency), y = Frequency)) +
+    geom_bar(stat = "identity", fill = "steelblue") +
+    labs(title = "Top Skills Overall",
+         x = "Skill",
+         y = "Number of Times Appears") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+})
+
+```
+
+
+2. Skills Offered
+=====================================  
+
+What are the top 10 skills learnt among the paid or free courses with the rating range in the selected category?
+
+Row {data-height=500}
+-------------------------------------
+
+```{r 4_input}
+
+inputPanel(
+  selectInput(inputId="rating_paid_variable", label = "Is Paid", choices = unique.paid, selected = unique.paid, multiple = TRUE),
+  selectInput(inputId="rating_category_variable", label = "Category", choices = unique.categories, selected = unique.categories, multiple = TRUE),
+  sliderInput(inputId = "rating_min", label = "Min rating", min = 0, max = 4.5, value = 4, step = 0.5),
+  sliderInput(inputId = "rating_max", label = "Max rating", min = 0.5, max = 5, value = 5, step = 0.5)
+)
+
+# input = list(rating_paid_variable = all, rating_category_variable = all, rating_min = 4, rating_max = 5)
+
+```
+
+```{r 4_output}
+
+renderDataTable({
+  top <- dat[get(paid.name) %in% input$subscription_paid_variable & get(rating.name) >= input$rating_min & get(rating.name) <= input$rating_max & get(category.name) == input$rating_category_variable,  ] 
+  tab <- percentage.table(x = top[, get(topic.name)])
+  tab <- data.table(tab)
+  setnames(tab, c("x", "N"), c("Skill", "Percentage"))
+  datatable(tab[order(-Percentage)][1:10, ],
+            options = list(scrollY = "300px"))
+})
+
+```
+
+
+3. Subscription
+=====================================  
+
+What are the top subscribed courses for selected category?
+
+Row {data-height=500}
+-------------------------------------
+
+```{r 3_input}
+
+inputPanel(
+     selectInput(inputId="subscription_paid_variable", label = "Is Paid", choices = unique.paid, selected = unique.paid, multiple = TRUE),
+  selectInput(inputId="subscription_category_variable", label = "Select Category:", choices = unique.categories, selected = unique.categories[1]),
+    sliderInput(inputId = "subscription_rating_min", label = "Min rating", min = 0, max = 4.5, value = 4, step = 0.5),
+  sliderInput(inputId = "subscription_rating_max", label = "Max rating", min = 0.5, max = 5, value = 5, step = 0.5),
+  sliderInput(inputId = "courses_number", label = "Show Top Courses", min = 1, max = 20, value = 5, step = 1)
+)
+
+# input <- list(subscription_paid_variable = ALL, subscription_category_variable = category.variables[1], subscription_rating_min = 4, subscription_rating_max = 5, courses_number = 5)
+
+```
+
+```{r 3_output}
+
+renderDataTable({
+  filtered_data <- dat[get(paid.name) %in% input$subscription_paid_variable & get(category.name) == input$subscription_category_variable & get(rating.name) >= input$subscription_rating_min & get(rating.name) <= input$subscription_rating_max, ]
+  top_subscribed_courses <- filtered_data[order(-num_subscribers), .(title, num_subscribers)][1:input$courses_number]
+  datatable(top_subscribed_courses,
+            options = list(scrollY = "200px"))
+  })
+
+
+```
+
+
+4. Cross-Tab
+=====================================  
+
+What is the distribution of courses by duration and price for the indicated skill?
+
+```{r 8_input}
+
+inputPanel(
+  textInput(inputId = "skills", label = "Indicate Skill:", value = "Python", width = "200px", placeholder = "Enter skill here")
+)
+
+# input = list(skills = "Python")
+
+```
+
+Row {data-height=500}
+-------------------------------------
+
+```{r 8_output}
+
+renderDataTable({
+  filtered_data <- dat[grepl(input$skills, dat$topic, ignore.case = TRUE) | 
+                     grepl(input$skills, dat$category, ignore.case = TRUE) | 
+                     grepl(input$skills, dat$subcategory, ignore.case = TRUE), ]
+    results <- xtabs(~get(price.group.name) + get(duration.group.name), data = filtered_data)
+    results_df <- as.data.frame.matrix(results)
+    datatable(results_df, options = list(scrollY = "300px"))
+})
+
+```
+
+
+
+5. Duration (Course)
+=====================================  
+
+What is the distribution of paid or free courses by duration for the selected category? 
+
+Row {data-height=500}
+-------------------------------------
+
+```{r 5_input}
+
+inputPanel(
+  selectInput(inputId="duration_paid_variable", label = "Is Paid", choices = unique.paid, selected = unique.paid, multiple = TRUE),
+  selectInput(inputId="duration_category_variable", label = "Category", choices = unique.categories, selected = unique.categories, multiple = TRUE),
+  sliderInput(inputId = "duration_min", label = "Min duration (Mins)", min = 1, max = 21600, value = 1, step = 720),
+  sliderInput(inputId = "duration_max", label = "Max duration (Mins)", min = 720, max = 22570, value = 720, step = 720)
+)
+
+# input = list(duration_paid_variable = all, duration_category_variable = all, duration_min = 1, duration_max = 720)
+
+```
+
+```{r 5_output}
+
+renderPlot({
+  
+  # Set the desired range, number of bins, and interval
+  min_val <- input$duration_min
+  max_val <- input$duration_max
+  num_bins <- 12
+  interval <- (max_val - min_val) / num_bins
+  
+  # Filter the data within the specified range
+  filtered_data <- dat[get(paid.name) %in% input$duration_paid_variable & get(duration.name) >= min_val & get(duration.name) <= max_val & get(category.name) %in% input$duration_category_variable, ]
+
+  # Create the histogram
+  hist_data <- hist(filtered_data$content_length_min, breaks = seq(min_val, max_val, by = interval), plot = FALSE)
+  
+  # Plot the histogram bars with count values
+  plot(hist_data, col = "lightblue", border = "white", xlab = "Duration (in minutes)", ylab = "Count", main = "Histogram of Duration", xaxt = "n")
+  text(hist_data$mids, hist_data$counts, labels = hist_data$counts, col = "black", cex = 0.6, pos = 1)
+  
+  # Define the x-axis labels with horizontal orientation
+  axis(1, at = seq(0, max_val, by = 60), las = 1)
+
+})
+
+```
+
+6. Duration (Lecture)
+=====================================  
+
+What is the distribution of paid or free courses by duration per lecture for the selected category?
+
+Row {data-height=500}
+-------------------------------------
+
+```{r 6_input}
+
+inputPanel(
+  selectInput(inputId="duration_lect_paid_variable", label = "Is Paid", choices = unique.paid, selected = unique.paid, multiple = TRUE),
+  selectInput(inputId="duration_lect_category_variable", label = "Category", choices = unique.categories, selected = unique.categories, multiple = TRUE),
+  sliderInput(inputId = "duration_lect_min", label = "Min duration (Mins)", min = 0.01, max = 230, value = 0.01, step = 5),
+  sliderInput(inputId = "duration_lect_max", label = "Max duration (Mins)", min = 1, max = 240, value = 30, step = 5)
+)
+
+# input = list(duration_lect_paid_variable = all, duration_lect_category_variable = all, duration_lect_min = 1, duration_lect_max = 720)
+
+```
+
+```{r 6_output}
+
+renderPlot({
+  
+  # Set the desired range, number of bins, and interval
+  min_val <- input$duration_lect_min
+  max_val <- input$duration_lect_max
+  num_bins <- 10
+  interval <- (max_val - min_val) / num_bins
+  
+  # Filter the data within the specified range
+  filtered_data <- dat[get(paid.name) %in% input$duration_lect_paid_variable & get(duration.lect.name) >= min_val & get(duration.lect.name) <= max_val & get(category.name) %in% input$duration_lect_category_variable, ]
+
+  # Create the histogram
+  hist_data <- hist(filtered_data$duration_per_lecture, breaks = seq(min_val, max_val, by = interval), plot = FALSE)
+  
+  # Plot the histogram bars with count values
+  plot(hist_data, col = "lightblue", border = "white", xlab = "Duration (in minutes)", ylab = "Count", main = "Histogram of Duration per Lecture", xaxt = "n")
+  text(hist_data$mids, hist_data$counts, labels = hist_data$counts, col = "black", cex = 0.6, pos = 1)
+  
+  # Define the x-axis labels with horizontal orientation
+  axis(1, at = seq(0, max_val, by = 3), las = 1)
+  
+})
+
+```
+
+7. Prices
+=====================================  
+
+What is the distribution of courses by prices for the selected category? 
+
+Row {data-height=500}
+-------------------------------------
+
+```{r 7_input}
+
+inputPanel(
+  selectInput(inputId="price_category_variable", label = "Category", choices = unique.categories, selected = unique.categories, multiple = TRUE),
+  sliderInput(inputId = "price_min", label = "Min price", min = 0, max = 990, value = 0, step = 100),
+  sliderInput(inputId = "price_max", label = "Max price", min = 100, max = 1000, value = 100, step = 100)
+)
+
+# input = list(price_category_variable = all, price_min = 0, price_max = 10)
+
+```
+
+```{r 7_output}
+
+renderPlot({
+  
+  dat_paid <- dat[is_paid == TRUE, ]
+  
+  # Set the desired range, number of bins, and interval
+  min_val <- input$price_min
+  max_val <- input$price_max
+  num_bins <- 10
+  interval <- (max_val - min_val) / num_bins
+  
+  # Filter the data within the specified range
+  filtered_data <- dat_paid[get(price.name) >= min_val & get(price.name) <= max_val & get(category.name) %in% input$price_category_variable, ]
+  
+  # Create the histogram
+  hist_data <- hist(filtered_data$price, breaks = seq(min_val, max_val, by = interval), plot = FALSE)
+  
+  # Plot the histogram bars with count values
+  plot(hist_data, col = "lightblue", border = "white", xlab = "Price", ylab = "Count", main = "Histogram of Price")
+  text(hist_data$mids, hist_data$counts, labels = hist_data$counts, col = "black", cex = 0.6, pos = 1)
+
+})
+
+```
+
+8. Models
+=====================================  
+
+Row {data-height=500}
+-------------------------------------
+
+```{r 9_input}
+
+inputPanel(
+ 
+  selectInput(inputId= "reg_outcome_var", label = "Outcome Variable:", choices = outcome.var, selected = outcome.var[1]),
+  
+    selectInput(inputId = "reg_inputs", label = "Choose Inputs:", choices = c(lectures.name, reviews.name, comments.name, duration.name, category.name, price.name, subscribers.name, rating.name), selected = c(lectures.name, reviews.name, comments.name, duration.name, category.name, price.name, subscribers.name, rating.name), multiple = TRUE)
+)
+
+# input = list(reg_outcome_var = outcome.var[1], reg_inputs = ALL)
+
+```
+
+Row {data-height=500}
+-------------------------------------
+
+```{r 9_output}
+
+renderDataTable({
+
+  res <- fit.model(dt = dat, outcome.name = input$reg_outcome_var, input.names = input$reg_inputs, model.type = "linear")
+  
+  datatable(data = res, options = list(scrollY = "300px"))
+  
+})
+
+
+```
+
+9. Review Sentiments
+=====================================  
+
+What are the most frequently appearing words in the **positive / negative** reviews of each course category in a selected year?    
+( Please note that due to the huge amount of data processing, word cloud can take up to 30 seconds to generate. )  
+  
+
+Row {data-height=500}
+-------------------------------------
+
+```{r q1_input}
+inputPanel(
+  selectInput(inputId="year", label = "Select Year:", choices = years, selected = years[1]),
+  selectInput(inputId="pos.neg", label = "Select Reviews:", choices = pos.neg, selected = pos.neg[2]),
+  selectInput(inputId="category", label = "Select Category:", choices = unique.categories, selected = unique.categories[6]),
+  #checkboxInput(inputId = "wordcloud", label = "Show Word Cloud", value = FALSE)
+)
+```
+
+Row {data-height=500}
+-------------------------------------
+
+```{r q1_output}
+renderWordcloud2({
+  year.skill <- year.cat(input$year, input$category) 
+  #score
+  score <- afinn.score(year.skill)
+
+  #positive word frequency
+  if(input$pos.neg == "Positive"){
+    word_freq_count <- word.freq(score, year.skill, TRUE)
+  }
+  if(input$pos.neg == "Negative"){
+    word_freq_count <- word.freq(score, year.skill, FALSE)
+  }
+  colorVec = rep(c('mediumpurple', 'lightskyblue'), length.out=nrow(word_freq_count))
+  wordcloud2(word_freq_count, size = 0.5, fontFamily= 'arial', color = colorVec)
+})
+```
+

@@ -1,0 +1,823 @@
+---
+title: "Online Learning Platform"
+author: "APAN Business Consulting"
+date: "Jul 2023"
+output: html_document
+---
+
+```{r setup, include= FALSE }
+library(rmarkdown)
+library(knitr)
+library(Hmisc)
+library(DT)
+library(data.table)
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+library(tidytext)
+library(wordcloud)
+library(RColorBrewer)
+library(tokenizers)
+
+
+assignInNamespace(x = "cedta.override", value = c(data.table:::cedta.override,"rmarkdown"), ns = "data.table")
+
+knitr::opts_chunk$set(echo = FALSE , comment="", warning = FALSE, message = FALSE, tidy.opts=list(width.cutoff=55), tidy = TRUE)
+```
+
+```{r source, echo=FALSE}
+#set working directory
+
+source("../Reports/functions.R")
+source("../Reports/constants.R")
+
+```
+
+```{r read_data, echo=FALSE}
+
+#data for skills required
+dat_dice <- fread(input = "../Data/dice_com-job_us_sample.csv", verbose = F)
+dat_2 <- fread(input = "../Data/career_builder.csv", verbose = F)
+
+#data for course analyses
+dat <- fread(input = "../Data/Udemy_Course_info.csv", verbose = F)
+
+#data for sentiment analyses
+udemy.comments = fread(input ="../Data/Udemy_Comments.csv")
+```
+
+# The Online Learning Industry {.tabset}
+  
+The global pandemic has enhanced the awareness for online learning and many professionals are seeking to add supplementary skills to their resume. However, entering a new market, especially in a competitive market that is on the rise, can present some key challenges. It is crucial to create a complete methodical market entrance strategy, develop an understanding of the competitive landscape and plan for customer acquisition.
+
+In this report, we aim to produce data-driven insights regarding the online education market and courses demanded by consumers, to guide Edvance in making a strong entry into the market. By leveraging a data driven approach, our team was able to produce meaningful recommendations that will make your platform stand out in this competitive industry. Ultimately, our recommendations revolve around identifying relevant courses to develop in order to provide the best value to potential consumers who will drive up revenue and market growth.
+
+**Recommendations**
+  
+With our analysis on skills demanded by employers, competitor offerings, and users' reviews, we take our findings into consideration to generate the following recommendations:  
+  
+* Offer and promote courses with skills that matches employers needs
+* Keep lectures short and succinct
+* Collaborate with popular instructors to create course contents
+* Launch premium content with higher price points, manage value perception and offer free trial periods or lectures
+* Create discussion forum for users to ask questions and discuss with instructor and fellow users
+  
+Our analysis below will go in depth to elaborate on our analytical process and justifications for these recommendations.    
+  
+
+## Literature Review
+
+**The Booming Online Course Business – Forbes (May 25, 2022)**
+
+The COVID-19 pandemic forced many companies to transition its workers to work from home instead of the office. This transition resulted in advanced technology for those remote workers but also in a demand for more skilled employees. By 2022, the online course era has entered the mainstream and proved to be an efficient and affordable way for displaced employees to target specific skills they deemed necessary for their professional progression. Some of the more popular courses or skills seem to revolve around programming, data analytics, and data visualization which makes sense when considering the emergence of the blockchain, generative AI and other similar technological skills. The spike in the demand for courses means there is also opportunity for new online education platforms to emerge. In order to be successful in building an online education platform, the first step is to predict which skills will be demanded in the short to mid-term. Another possible solution is to hire a coach or consultant who specializes in helping people launch paid courses. In addition to developing good quality content, marketing might play an even bigger role in the success of an online platform and therefore it is necessary to allocate sufficient resources towards it. Lastly, it is important to remember that online reviews can make or break a course and enticing learners to share their good experiences could prove a useful tool in encouraging future learners to purchase the course. 
+
+**Demand in online education is growing. Are providers ready? – McKinsey & Company (July 20, 2022)**
+
+Four core market forces are reshaping the online education space: increased competition, consolidation by a handful of big players, an influx of investments, and rising standards for quality. Starting in 2020 there has been a constant increase in the demand for online education and in particular digital education startups that offer specific courses instead of entire degrees. This new wave of digital education companies has disrupted the traditional education space and has been driven by support of major venture capital firms. The funding of edtech (education technology) grew from $1 billion to $8 billion between 2017-2021. In addition, there has been several successful IPO of edtech companies in recent years including Coursera which was valued at over $4 billion. There are 5 strategic moves that could unlock opportunities when considering entering the online education space:
+
+  1.    Meet student and labor market needs.
+  2.    Transform career planning and coaching services.
+  3.    Revolutionize employer relationships.
+  4.    Deliver a distinctive learning experience.
+  5.    Build a bold and differentiated brand.
+  
+Focusing on these five strategic objectives could yield growth, assist in acquiring market share, and lead to the right content creation. 
+
+**Learner Outcome Report – Coursera (December, 2023)**
+  
+Coursera produced a report which details findings from more than 55,000 learners across over 190 countries, underscoring the impact that Coursera have had on learners at all stages of their career and personal journeys. The report found that 85% of the learners who join Coursera are looking to transform their careers. Career transformation considers landing a first job, switching careers, or advancing in a current role. The report also presents that 77% of learners say that the online courses they subscribed to in Coursera has helped in their daily work assignments while 25% of those who completed and Entry-Level Professional Certificate reported getting a new job. A key finding was that learners are seeking to add micro-credentials to their resume. Micro-credentials focus on a specific set of learning outcomes in a narrow field of study and by perusing those learners are able to respond to the rapidly changing demands of the labor market. In most countries learners on Coursera were looking to switch to a new role or advance in their current one rather than landing their first role.  
+   
+
+## Research Questions  
+  
+Edvance is looking to enter the online education market and contacted our team in efforts to learn about what courses the company should produce. In order to provide Edvance with a comprehensive report on the matter, the team has crafted research questions which we believe will be useful insights for our client. 
+
+First, insights are required to develop a competitive pricing strategy and determine the typical duration of courses. For this, we will find out how the price and duration distribution of courses vary across different categories/skills, and how this variation relates to the number of subscribers. Udemy also offers free courses for learners. If there is a significant difference in average ratings between paid and free courses, it indicates that learners may have different expectations and experiences based on the pricing model. Platforms have to curate the quality, content and learning experiences of their paid courses, ensuring customer satisfaction and retention. Thus, a comparison of the average ratings of paid and free courses to determine if there is a significant difference will be conducted.
+
+It is essential to develop and offer courses that cater to the demands of both learners and employers, bridging any skill gaps and increasing the relevance and marketability of the courses. Hence, we aim to identify the highly subscribed courses and the in-demand skills that learners are most interested in, and how they align with the skills required by employers. Content creation is also key to attract more learners and enhance the overall learning experience. We will identify the content creators who consistently produce highly rated courses so that Edvance can consider potential collaborations with these instructors. To facilitate the development and promotion of courses to generate revenue and attract learners, we will compare the average ratings of courses across different categories to identify if there are significant differences between the groups. Edvance can then identify potential areas to develop courses in categories that receive lower ratings or ensure higher quality courses in categories that receive higher ratings. The relationship (strength and direction) between course subscription, rating, pricing, course duration, and category will also be examined with regression and correlation. This information will help the platform understand the key drivers that attract learners and tailor their course offerings accordingly.
+
+To take user experience into consideration, we want to understand what the users are saying about the courses by category. By selecting for the most frequently occurring words in the UDemy reviews and examining the sentiments expressed (positive and negative), we aim to identify users’ pain points, preferences, priorities, and expectations on online courses which could help in the refinement of the platform or courses and lead to better user experiences and satisfaction. 
+
+#### **To summarize, we categorize the research questions below:**
+
+#### Skills in demand and gap
+* What are the top 10 skills in demand by employers?  
+* What proportion of competitor courses are based on skills demanded by employers?  
+* Among the top 10,000 subscribed courses, what are the top 10 skills learnt?
+* Is there a gap between skills required and skills learned?
+
+#### Competitor’s Offering & Learners’ Subscription   
+* What is the proportion of courses based on categories?  
+* What is the distribution of courses by rating?  
+* Who are the top instructors?  
+
+#### Significance Analysis  
+* How much impact do various variables have on the rating of courses, number of subscribers and price of courses?
+* Are there significant differences in ratings across categories and between paid and free courses?
+
+#### Sentiment Analysis  
+* What are the most frequently appearing words in the positive / negative reviews of each course category?    
+   
+    
+  
+## Skills demanded by employers {.tabset}
+
+What are the top 10 skills in demand by employers?
+
+A key step in creating our report was to develop an understanding of the skills desired by employers so that Edvance could target these skills when developing their online courses. In order to do that, the team needed to gather and analyze job listing data with the ultimate goal of extracting the skills demanded in each job listing.
+
+We found that the skills were split quite evenly between soft skills and technical skills. To our surprise, the top 3 skills demanded by employers were soft skills and not technical ones. Below you can find a table summarizing the top 10 skills demanded by employers:
+
+```{r - employer pt 1, echo=FALSE}
+# Step 1: Create a vector of all skills
+all_skills1 <- skills_vector(dat_dice)
+all_skills2 <- skills_vector(dat_2)
+
+# Step 2: Calculate frequency of each skill
+skill_count1 <- count_skills(all_skills1)
+skill_count2 <- count_skills(all_skills2)
+
+# Combine the "skills" columns from both datasets
+combined_skills <- c(dat_dice$skills, dat_2$skills)
+
+# Split the combined skills vector by commas to get individual skills
+individual_skills <- combined_skills %>%
+  strsplit(",\\s*") %>%
+  unlist()
+
+# Calculate frequency of each skill
+top10_skills <- freq_by_skill(individual_skills)
+
+
+# Present finding as a bar chart
+ggplot(top10_skills, aes(x = reorder(Skill, -Frequency), y = Frequency)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  labs(title = "Top Skills Demanded by Employers",
+       x = "Skill",
+       y = "Frequency") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+It is our recommendation to focus on the top three soft skills and top three technical skills demanded which are:  
+   
+#### **Soft Skills**  
+* management skills  
+* scheduling skills  
+* customer service skills. 
+    
+#### **Technical Skills**  
+* JavaScript  
+* SQL  
+* Development  
+    
+By narrowing down on these specific skills, we can now focus our market and competitor analyses on meeting employers' demand in order to create valuable insights for Edvance.  
+    
+
+## Competitive Analysis {.tabset}
+
+### Overview 
+
+Udemy offers a vast collection of courses spanning diverse subjects. We obtained detailed information on about 200,000 courses offered by Udemy. Details include title, price, number of subscribers, average rating, number of lectures, duration of course (in minutes), publication date, category, topic, instructor name, etc.. 
+
+#### <u>Data cleaning</u>
+
+Prior to analysis, we cleaned and prepared the data. For a start, the client is only interested in developing courses in English. Hence, we filtered out courses in other languages. The date columns have been reformatted for usability and consistency. Blanks, zeros and NAs have been treated/considered. For those with duration "0", we observed that they are mainly tests and will be dropped from the relevant analyses associated with duration. Some courses have no last update date as no changes have been made since publication. We also checked to ensure no duplicate courses. Every course is unique by their ID but could have the same titles (i.e. different instructors and contents).
+
+```{r clean data, include=FALSE}
+
+# Filter only for English courses
+dat <- dat[language == "English",]
+
+# Convert date
+dat <- dat[, published_date := as.Date(published_time)]
+dat <- dat[, last_update_date := as.IDate(last_update_date, format = "%d/%m/%Y")]
+dat[last_update_date == "", last_update_date := NA]
+
+# Replace blanks with Null in the "topic" column
+dat <- dat[topic == "", topic := NA]
+
+# Count NA values in each column
+na_counts <- colSums(is.na(dat))
+na_counts
+
+# Check courses with duration = 0
+head(dat[content_length_min == 0, ], 5)
+
+# Identify duplicated titles
+duplicates <- dat[duplicated(dat$title)]
+duplicates[1:5]
+
+# Print out to check duplicated titles
+dat[title == "Learn Java From Scratch",]
+dat[title == "Learning to Learn",]
+
+```
+
+After cleaning, there are `r dat[, .N]` courses left in the dataset. The unique number of categories, subcategories, topics and instructors are tabulated below. Details of the categories and respective subcategories can be found in the appendix.
+
+```{r - unique counts, echo=FALSE}
+
+columns <- c("category", "subcategory", "topic", "instructor_name")
+result <- lapply(columns, function(col) uniqueN(dat[, ..col]))
+result_dt <- data.table(Column = columns, Unique_Count = unlist(result))
+result_dt
+
+```
+
+#### <u>Data preparation</u>
+
+As a final step, we also computed the duration per lecture and grouped the prices, duration (by entire course and per lecture) and prices to facilitate analysis.
+
+```{r - prepare data, echo=FALSE}
+
+# Calculate duration per lecture
+dat <- dat[, duration_per_lecture := round(content_length_min / num_lectures, 2)]
+dat <- dat[is.na(duration_per_lecture), duration_per_lecture := 0]
+
+# Define sub-groups for rating
+dat[, "rating_group" := cut(
+  avg_rating,
+  breaks = c(-Inf, 0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, Inf),
+  labels = c("Not rated", "<=0.5", ">0.5 - 1.0", ">1.0 - 1.5", ">1.5 - 2.0", ">2.0 - 2.5", ">2.5 - 3.0", ">3.0 - 3.5", ">3.5 - 4.0", ">4.0 - 4.5", ">4.5 - 5.0"), 
+  right = TRUE
+)]
+
+# Define sub-groups for duration of courses
+dat[, "duration_group" := cut(
+  content_length_min,
+  breaks = c(-Inf, 0, 3000, 6000, 9000, 12000, 15000, 18000, 21000, Inf),
+  labels = c("N.A", ">0 - 3000", ">3000 - 6000", ">6000 - 9000", ">9000 - 12000", ">12000 - 15000", ">15000 - 18000", ">18000 - 21000", ">21000"),  
+  right = TRUE
+)]
+
+# Define sub-groups for duration per lecture
+dat[, "duration_lect_group" := cut(
+  duration_per_lecture,
+  breaks = c(-Inf, 0, 30, 60, 90, 120, 150, 180, 210, Inf),
+  labels = c("N.A", ">0 - 30", ">30 - 60", ">60 - 90", ">90 - 120", ">120 - 150", ">150 - 180", ">180 - 210", ">210"),  
+  right = TRUE
+)]
+
+# Define sub-groups for price 
+dat[, "price_group" := cut(
+  price,
+  breaks = c(-Inf, 0, 100, 200, 300, 400, 500, 600, 700, 800, 900, Inf),
+  labels = c("Free", ">0 - 100", ">100 - 200", ">200 - 300", ">300 - 400", ">400 - 500", ">500 - 600", ">600 - 700", ">700 - 800", ">800 - 900", ">900"),  
+  right = TRUE
+)]
+
+```
+
+### Skills Gap
+
+With the earlier identification of skills in demand by employers, we now looked at Udemy's offering and the learners' subscription to identify possible gaps. 
+
+For Udemy , each course is classified first by categories, followed by subcategories and lastly topics. We noticed that: 
+
+```{r offering - pt 1, echo=FALSE}
+
+check_term_in_columns <- function(term) {
+  columns <- c("category", "subcategory", "topic")
+  term_column <- which(
+    apply(dat[, .SD, .SDcols = columns], 2, function(col) any(grepl(paste0("^", term, "$"), col, ignore.case = TRUE)))
+  )
+  
+  if (length(term_column) > 0) {
+    cat("The term '", term, "' exists in the following column(s):\n")
+    cat(names(dat[, .SD, .SDcols = columns])[term_column], "\n")
+  } else {
+    cat("The term '", term, "' does not exist in the selected columns.\n")
+  }
+}
+
+check_term_in_columns("Management")
+check_term_in_columns("Scheduling")
+check_term_in_columns("Customer Service")
+check_term_in_columns("Java")
+check_term_in_columns("Development")
+check_term_in_columns("SQL")
+
+```
+
+The number and proportion of courses by each identified skill in Udemy's offering is as follows:  
+
+```{r offering - pt 2, echo=FALSE}
+
+# Function to calculate prop of skill
+get_prop <- function(data, column_name, skill) {
+  data %>%
+    count({{column_name}}, sort = TRUE) %>%
+    mutate(Percentage = round((n / nrow(data)) * 100, 2)) %>%
+    filter({{column_name}} == skill) %>%
+    setNames(c("Skill", "Frequency", "Percentage"))
+}
+
+# Calculate for specific skill
+development_row <- get_prop(dat, category, "Development")
+management_row <- get_prop(dat, subcategory, "Management")
+customer_service_row <- get_prop(dat, topic, "Customer Service")
+java_row <- get_prop(dat, topic, "Java")
+sql_row <- get_prop(dat, topic, "SQL")
+
+# Combine the results
+result <- rbindlist(list(development_row, management_row, customer_service_row, java_row, sql_row))
+setcolorder(result, c(names(result)[!names(result) %in% c("Frequency", "Percentage")], "Frequency", "Percentage"))
+print(result)
+
+```
+
+As for scheduling, we surmise that employers could be referring to project management. If required, we could pull out the data. 
+
+Course offering aside, it is also important to see what kind of skills learners are subscribing to. Among the top 10,000 subscribed courses, the 10 skills learnt are as follows:
+
+
+```{r subscription - pt 1, echo=FALSE}
+
+filtered_dat <- dat[order(-get(subscribers.name)),][1:10000,]
+tab <- percentage.table(x = filtered_dat[, get(topic.name)])
+tab <- data.table(tab)
+setnames(tab, c("x", "N"), c("Skill", "Percentage"))
+tab[order(-Percentage)][1:10, ]
+
+```
+
+The results showed that there is a high focus on technical skills. There doesn’t seem much interest in soft skills or it could be affected by the courses available.
+
+From the courses offered and subscribed versus those demanded by employers, we can see that there is a gap. There is an opportunity to (i) offer more courses based on what is demanded by employers and (ii) highlight and market the skills required by employers to boost demand for these courses.
+
+
+### Offering and subscription
+
+Returning to more global analyses, we looked at the proportion of courses by category. The top 2 categories are IT related, covering about 30% of the courses.
+
+Looking at the course classifications, the skills in demand by employers would generally fall under these 4 categories => IT & Software, Development, Business & Personal Development.
+
+The proportion of courses by the various categories are tabulated below. These 4 categories would make up about half of the courses offered by Udemy.
+
+```{r offering - pt 3, echo=FALSE}
+
+tab <- percentage.table(x = dat[, get(category.name)])
+tab <- data.table(tab)
+setnames(tab, c("x", "N"), c("Category", "Percentage"))
+
+# Create a bar plot
+plot_barchart(tab, Category, Percentage, "Category", "Percentage", "Percentage by Category")
+
+```
+
+For each category, the top 3 topics covered are tabulated below.
+
+[Tip: Use the dynamic dashboard "2.Skills Offered" to extract the list of top topics covered by courses filtered by category, whether the courses are paid/or not and rating.]
+
+```{r p1_d, echo=FALSE}
+top_topics <- dat[, .N, by = .(category, topic)][order(-N)][, .SD[1:3], by = category]
+top_topics
+```
+
+For each category the top 3 courses that are most subscribed are listed below.
+
+[Tip: Use the dynamic dashboard "3. Subscription" to extract the top courses filtered by category, whether the courses are paid/or not and rating.]
+
+```{r p2 - b, echo=FALSE}
+
+top_subscribed_courses <- dat[order(-num_subscribers), .SD[1:3, .(title, num_subscribers)], by = category]
+top_subscribed_courses
+```
+
+We also noticed that more than 75% of the courses obtained a rating above 3.5.
+
+```{r rating - pt 1, echo=FALSE}
+
+tab <- percentage.table(x = dat[, get(rating.group.name)])
+dt <- data.table(tab)
+setnames(dt, c("x", "N"), c("Rating group", "Percentage"))
+
+# Create a bar plot
+plot_barchart(dt, `Rating group`, Percentage, "Rating Group", "Percentage", "Percentage by Rating Group", reorder_x = FALSE)
+
+```
+
+
+### Duration and price
+
+In terms of distribution of courses by price and course duration, we noticed a high concentration of courses that are priced less than $200 and with course duration of less than 3,000 minutes (50 hours)
+
+[Tip: Use the dynamic dashboard “4. Cross-Tab” for the cross tabulation by price and course duration for a certain topic/skill (free text entry e.g. SQL)]
+
+```{r cross - pt 1, echo=FALSE}
+
+cross_table <- table(dat$price_group, dat$duration_group)
+cross_table
+
+```
+
+The proportion of courses by duration (entire course and per lecture) as well as price are tabulated below:
+
+```{r duration - pt 1, echo=FALSE}
+
+tab <- percentage.table(x = dat[, get(duration.group.name)])
+dt <- data.table(tab)
+setnames(dt, c("x", "N"), c("Duration group", "Percentage"))
+
+# Create a bar plot
+plot_barchart(dt, `Duration group`, Percentage, "Duration", "Percentage", "Percentage by Duration (Course)", reorder_x = FALSE)
+
+
+```
+
+```{r duration - pt 3, echo=FALSE}
+
+tab <- percentage.table(x = dat[, get(duration.lect.group.name)])
+dt <- data.table(tab)
+setnames(dt, c("x", "N"), c("duration_lect_group", "Percentage"))
+
+# Create a bar plot
+plot_barchart(dt, duration_lect_group, Percentage, "Duration", "Percentage", "Percentage by Duration (Lecture)", reorder_x = FALSE)
+
+
+```
+
+```{r prices - pt 1, echo=FALSE}
+
+tab <- percentage.table(x = dat[, get(price.group.name)])
+dt <- data.table(tab)
+setnames(dt, c("x", "N"), c("Price group", "Percentage"))
+
+# Create a bar plot
+plot_barchart(dt, `Price group`, Percentage, "Price", "Percentage", "Percentage by Price", reorder_x = FALSE)
+
+
+```
+
+Drilling deeper, we looked at the most common duration per lecture that are less than 30 mins. A huge majority within 3 – 6 minutes delivering information in small, focused units. Microlearning has been found to improve knowledge retention and learner engagement. It also provides flexibility and encourage learning.
+
+[Tip: Use the dynamic application "5. Duration (Course) and "6. Duration (Lecture)" to see the distribution of courses by paid/not paid, course category and within the preferred duration. ]
+
+```{r duration - pt 4, echo=FALSE}
+
+# Set the desired range, number of bins, and interval
+min_val <- 0.01
+max_val <- 30
+num_bins <- 10
+interval <- (max_val - min_val) / num_bins
+
+# Filter the data within the specified range
+filtered_data <- dat[get(duration.lect.name) >= min_val & get(duration.lect.name) <= max_val, ]
+
+# Create the histogram
+hist_data <- hist(filtered_data$duration_per_lecture, breaks = seq(min_val, max_val, by = interval), plot = FALSE)
+
+# Plot the histogram bars with count values
+plot(hist_data, col = "lightblue", border = "white", xlab = "Duration per lecture (in minutes)", ylab = "Count", main = "Histogram of Duration per lecture", xaxt = "n")
+text(hist_data$mids, hist_data$counts, labels = hist_data$counts, col = "black", cex = 0.6, pos = 1)
+
+# Define the x-axis labels with horizontal orientation
+axis(1, at = seq(0, max_val, by = 3), las = 1)
+
+```
+
+As for prices, among the courses priced less than $100, a huge majority of them are between $10 to $20. 
+
+[Tip: Use the dynamic application "7. Prices" to see the distribution of courses by category within the preferred price range.]
+
+Edvance has to consider the pricing strategy to adopt. We would not recommend diving into the red sea of price competition. Coming up with premium contents can help avoid that. To attract learners, Edvance can consider offering free trial periods or first few lectures.
+
+```{r prices - pt 2, echo=FALSE}
+
+# Set the desired range, number of bins, and interval
+min_val <- 0
+max_val <- 100
+num_bins <- 10
+interval <- (max_val - min_val) / num_bins
+
+# Filter the data within the specified range
+filtered_data <- dat[is_paid == TRUE, ][get(price.name) >= min_val & get(price.name) <= max_val, ]
+
+# Create the histogram
+hist_data <- hist(filtered_data$price, breaks = seq(min_val, max_val, by = interval), plot = FALSE)
+
+# Plot the histogram bars with count values
+plot(hist_data, col = "lightblue", border = "white", xlab = "Price", ylab = "Count", main = "Histogram of Price")
+text(hist_data$mids, hist_data$counts, labels = hist_data$counts, col = "black", cex = 0.6, pos = 1)
+
+```
+
+### Instructors
+
+The top 10 producers of courses are mostly companies. 
+
+```{r instructors - pt 1, echo=FALSE}
+
+result <- dat[, .(Count =.N), by = get(instructor.name)][order(-Count)][Count > 250]
+result
+
+```
+
+But in terms of producing courses with better ratings from learners (at least 100 courses and average rating of 4.0), they are mainly from individuals. Edvance can consider collaborations with some of these instructors to develop good contents.
+
+```{r instructors - pt 2, echo=FALSE}
+
+filtered_instructors <- dat[, .N, by = instructor_name][N > 100, instructor_name]
+result <- dat[instructor_name %in% filtered_instructors, .(Mean = round(mean(get(rating.name)), 2)), by = instructor_name][order(-Mean)][Mean >= 4]
+
+result
+
+```
+
+### Significant impact
+
+Next, we checked whether significant relationships exist between variables and if there is what is the direction of the impact. Positive relationship means that the outcome tends to increase as variable increases and a negative relationship the outcome tends to drop as variable increases.
+
+We found that the number of lectures and courses in the category of music have a positive relationship with average rating.
+
+In view that the higher number of lectures positively influence the average rating, investing in well-structured and comprehensive courses may lead to higher student satisfaction and better ratings. 
+
+Edvance has to explore other measures of quality to see what else can influence the average rating of the course. 
+
+```{r models - pt 1, echo=FALSE}
+
+engagement.model(dat, "avg_rating", c("price",  "num_subscribers", "num_lectures", "num_reviews", "num_comments", "content_length_min", "category"), "linear")
+
+```
+
+As for number of subscribers, the number of lectures, number of reviews, number of comments, average rating and certain course categories have a positive relationship with it.
+
+Edvance should focus on producing high-quality courses with comprehensive content to encourage positive reviews and ratings from learners. Encouraging interaction and feedback through comments and discussions as well as highlighting the number of lectures, positive reviews, and high average ratings in marketing materials can also potentially increase the subscriber base.
+
+
+```{r models - pt 2, echo=FALSE}
+
+engagement.model(dat, "num_subscribers", c("price",  "avg_rating", "num_lectures", "num_reviews", "content_length_min","num_comments", "category"), "linear")
+
+```
+
+As for price, it was observed that the number of lectures, number of comments, and course length have a positive relationship while the number of reviews and average rating have a negative relationship with it.
+
+Understanding the positive impact of course length, number of lectures and comments as well as the nagative impact of average rating on pricing, Edvance can consider adopting a value-based pricing strategy. Longer, more comprehensive and quality courses with engaging content can be priced higher, reflecting the value they offer. The company could also consider bundling courses or offering discounts for students who enroll in multiple courses. This could encourage more reviews and improve the perceived value of the courses.
+
+The lower priced courses tended to attract more learners and hence more reviews. Nevertheless, the positive reviews can be leveraged as a marketing tool to attract more students and offset the impact of lower pricing.
+
+[Tip: Use the dynamic dashboard "8. Models" to model the different variables for average rating, number of subscribers and price]
+
+```{r models - pt 3, echo=FALSE}
+
+engagement.model(dat, "price", c("num_subscribers", "avg_rating", "num_lectures", "num_reviews", "num_comments", "content_length_min", "category"), "linear")
+
+```
+
+### Significant differences
+
+Significant differences in the average ratings of courses across categories. The company should carefully curate and maintain the quality of courses across different categories. Understanding the variations in average ratings can help identify areas for improvement in content, delivery, and overall student satisfaction. 
+
+
+```{r models - pt 4, echo=FALSE}
+
+average_ratings <- dat[, .(Average_Rating = round(mean(avg_rating), 2)), by = category]
+average_ratings
+
+# Create a bar plot
+plot_barchart(average_ratings, category, Average_Rating, "Category", "Average Rating", "Average Ratings by Category")
+
+# Perform one-way ANOVA
+model <- aov(avg_rating ~ category, data = dat)
+summary(model)
+
+```
+
+Significant difference between paid and free courses was also detected. On average, free courses tend to have higher ratings than paid courses. The difference between free and paid courses exists in each category of courses as well.
+
+Learners have higher expectations for paid courses. This highlights the importance of delivering value in paid courses and setting appropriate price points. The company should assess the value proposition of its paid courses to ensure they meet or exceed student expectations.
+
+To manage student expectations and ensure satisfaction, the company should aim to clearly communicate what each course offers. Clear course descriptions and learning outcomes can help align student expectations with the course content.
+
+```{r models - pt 5, echo=FALSE}
+
+paid_ratings <- dat[is_paid == TRUE, avg_rating]
+free_ratings <- dat[is_paid == FALSE, avg_rating]
+
+t_test_result <- t.test(paid_ratings, free_ratings)
+t_test_result
+
+```
+
+```{r models - pt 6, echo=FALSE}
+
+categories <- unique(dat$category)
+results <- data.table(Category = character(),
+                      t_value = double(),
+                      df = double(),
+                      p_value = double(),
+                      mean_x = double(),
+                      mean_y = double())
+
+for (cat in categories) {
+  paid_ratings <- dat[category == cat & is_paid == TRUE, avg_rating]
+  free_ratings <- dat[category == cat & is_paid == FALSE, avg_rating]
+  
+  result <- t.test(paid_ratings, free_ratings)
+  
+  results <- rbind(results, list(Category = cat,
+                                 t_value = result$statistic,
+                                 df = result$parameter,
+                                 p_value = result$p.value,
+                                 mean_x = mean(paid_ratings),
+                                 mean_y = mean(free_ratings)))
+}
+results
+
+```
+
+
+## Sentiment Analysis of User Reviews {.tabset} 
+  
+  
+```{r, echo=FALSE}
+# only keep english courses
+udemy.eng <- dat[language == "English",]
+
+# only keep english comments
+language_detection <- cld2::detect_language(udemy.comments$comment)
+udemy.comments.eng <- udemy.comments[, lang := language_detection][lang == "en", ]
+
+udemy.comments.eng$course_id <- as.numeric(udemy.comments.eng$course_id)
+# merge course & reviews
+udemy.merged <- merge(udemy.comments.eng, udemy.eng, by.x ='course_id', by.y= 'id', multiple = "all")
+
+#date time as only date
+udemy.merged$date <- as.Date(udemy.merged$date)
+reviews <- udemy.merged[, .(review.id = id, course = title, date = date, 
+                                         rating = rate, subscribers = num_subscribers, price = price, category = category, 
+                                          topic = topic, subcategory = subcategory, instructor = instructor_name, review = comment)]
+
+# Due to the large amount reviews, we will subset reviews by the most recent 3 years
+reviews.2020 <- reviews[date >= '2020-01-01' & date < '2021-01-01',]
+reviews.2021 <- reviews[date >= '2021-01-01' & date < '2022-01-01',]
+reviews.2022 <- reviews[date >= '2022-01-01' & date < '2023-01-01',]
+
+# this function calls above subset of reviews
+year.cat <- function(year, cat){
+  if(year == "2022"){
+    rev <- reviews.2022
+  }
+  if(year == "2021"){
+    rev <- reviews.2021
+  }
+  if(year == "2020"){
+    rev <- reviews.2020
+  }
+  rev.cat <- rev[category == cat, .(review.id = review.id, review = review)]
+  return(rev.cat)
+}
+```
+
+### Findings  
+  
+Identifying the top 5 words appearing in reviews show us the main topics and concerns of users. In our dynamic dashboard, you can explore and compare the most appearing words in different categories for the last 3 years.
+    
+Here, as an illustration, we examined the **reviews of Business and IT & Software category courses in 2022**.  An overview of the top words in positive reviews of both categories show connotations of optimism and cheerfulness like **"easy"**, **"helpful"**, and **"excellent"**. While the top words in both categories of negative reviews include **"time"** and **"hard"**.   
+    
+Examining the topics expressed the most frequently in negative comments can give a sense of direction towards which area to improve on. We can see that with the frequent mention of **"time"**, the course duration would be a factor to consider. Time is a common concern, further exploration can be conducted to examine reviews about time. The words **"content"** and **"hard"** can be interpreted as a hint to design the course content in a way that is easier for users to comprehend and digest. We also noticed that the word **"question"** appears the most in negative IT & Software reviews. This suggests that there may be unresolved questions for users after going through the course or a negative reaction towards the questions posed in the course that causes user dissatisfaction.
+
+We also see the frequent appearance of **"exam"** in both IT & Software's positive and negative reviews. It can be understood as the importance to test knowledge and skills. More attention could be invested in enhancing learners' experience with exam in online courses.
+   
+One word that occurs in all four categories examined is **"understand"**, emphasizing how being able to understand is a main criteria and pain point for users. The word "understand" along with "easy" and "hard" all indicate the level of comprehension. Ensuring ease of comprehension and users' sense of achievement can be a major driver of motivation for a remotely supervised online learning experience.  
+  
+From these findings, we see a recurring theme of negative reviews expressing difficulty of comprehension through words like “understand”, “hard”, “questions”, while ease of comprehension is a plus point that users expressed in positive reviews. To address these concerns, we recommend in each course creating discussion forums where users can post and discuss their questions where the instructor can provide adequate guidance and respond. This can help solve problems that students may encounter along the way, providing them a channel to resolve their questions.  Addressing these areas that are expressed in negative reviews can help Edvance in designing its platform and course contents to offer.
+
+We do acknowledge the limitation of word processing. For example, in phrases like “I do not understand”, the word “understand” is counted towards its frequency and the negative connotation of “not” will be a negative value calculated towards the review’s score. It’s important to consider that the appearance of these words can sometimes mean the lack of it. Nevertheless, its occurrence presents the topic as an area of concern. Sentiment analysis also lacks the capacity to capture sarcastic tones in reviews. With these constraints in sight, we mainly focus our attention on portraying the prevalence of topics in users’ reviews to understand the areas that users are most concerned with throughout their online learning experience. Notwithstanding so, Edvance can hold focus groups to deep dive into them.
+   
+### Business: Positive  
+  
+What are the most frequently appearing words in **positive** reviews of **Business** Category courses in **2022**?
+   
+#### Top 5 Words:   
+* easy    
+* understand    
+* helpful    
+* excellent    
+* amazing   
+   
+```{r business positive, echo=FALSE}
+#subset for business category & year 2022
+business.2022 <- year.cat("2022", "Business")
+#sentiment score of reviews
+business.2022.score <- afinn.score(business.2022)
+
+#positive review word frequency
+business.2022.pos <- word.freq(business.2022.score, business.2022, TRUE)
+
+#word cloud
+wordcloud(words = business.2022.pos$word, business.2022.pos$N, scale = c(2,0.5), max.words = 80, colors = brewer.pal(9,"Spectral"))
+
+```
+  
+
+
+### Business: Negative  
+   
+What are the most frequently appearing words in **negative** reviews of **Business** Category courses in **2022**?
+   
+#### Top 5 Words:  
+* understand    
+* time    
+* content    
+* hard   
+* lot    
+  
+```{r business negative, echo=FALSE}
+#negative review word frequency
+business.2022.neg <- word.freq(business.2022.score, business.2022, FALSE)
+
+#word cloud
+wordcloud(words = business.2022.neg$word, business.2022.neg$N, scale = c(2,0.5), max.words = 80, colors = brewer.pal(9,"Spectral"))
+
+```
+    
+
+### IT & Software: Positive  
+  
+What are the most frequently appearing words in **positive** reviews of **IT & Software** Category courses in **2022**?
+   
+#### Top 5 Words:   
+* easy    
+* exam    
+* understand    
+* excellent    
+* helpful   
+   
+```{r software positive, echo=FALSE }
+#subset for IT & Software category & year 2022
+software.2022 <- year.cat("2022", "IT & Software")
+#sentiment score of reviews
+software.2022.score <- afinn.score(software.2022)
+
+#positive review word frequency
+software.2022.pos <- word.freq(software.2022.score, software.2022, TRUE)
+
+#word cloud
+wordcloud(words = software.2022.pos$word, software.2022.pos$N, scale = c(2,0.5), max.words = 80, colors = brewer.pal(9,"Spectral"))
+
+```
+
+
+### IT & Software: Negative  
+  
+What are the most frequently appearing words in **negative** reviews of **IT & Software** Category courses in **2022**?
+   
+#### Top 5 Words:   
+* questions      
+* exam      
+* understand      
+* hard       
+* time   
+   
+```{r software negative, echo=FALSE}
+
+#negative review word frequency
+software.2022.neg <- word.freq(software.2022.score, software.2022, FALSE)
+
+#word cloud
+wordcloud(words = software.2022.neg$word, software.2022.neg$N, scale = c(2,0.5), max.words = 80, colors = brewer.pal(9,"Spectral"))
+
+```
+
+
+
+   
+## Citations
+
+2023 learner outcomes report - coursera. (n.d.). https://about.coursera.org/press/wp-content/uploads/2023/05/Learner-Outcomes-Report-2023.pdf 
+
+Diaz-Infante, N., Lazar, M., Ram, S., & Ray, A. (2022, July 20). Demand for online education is growing. are providers ready?. McKinsey & Company. https://www.mckinsey.com/industries/education/our-insights/demand-for-online-education-is-growing-are-providers-ready 
+
+Sackett, D. (2022, May 26). Council post: The booming online course business. Forbes. https://www.forbes.com/sites/forbesfinancecouncil/2022/05/25/the-booming-online-course-business/?sh=270c02094382    
+  
+## Appendix
+
+A summary of the course data:
+
+```{r explore data - pt 1}
+
+summary(dat)
+
+```
+
+The 13 categories of courses in Udemy' website are:
+
+```{r explore data - pt 2}
+
+unique_category <- unique(dat[, category])
+unique_category
+
+```
+
+The unique subcategories for each category are: 
+
+```{r explore data - pt 3}
+
+unique_subcategories_by_category <- lapply(unique(dat$category), function(cat) {
+  unique(dat[category == cat, subcategory])
+})
+unique_subcategories_by_category
+
+```

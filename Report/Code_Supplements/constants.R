@@ -1,3 +1,5 @@
+### Define constants to be used in R Markdown Reports
+
 id.name <- "id"
 price.name <- "price"
 paid.name <- "is_paid"
